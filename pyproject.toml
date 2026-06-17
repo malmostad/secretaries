@@ -7,7 +7,7 @@ packages = ["src/secretaries"]
 
 [project]
 name = "secretaries"
-version = "0.0.1.13"
+version = "0.0.1.18"
 license = "MIT"
 authors = [
   { name="Erik Broman", email="mikroberna@gmail.com" },
@@ -16,7 +16,7 @@ description = "A utility for removing personal data in text."
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
-  'Polars >= 0.19.2',
+  'Polars >= 0.19.13',
   'Transformers >= 4.33.1',
   'torch >= 1.13.1',
   'NLTK >= 3.8.1',

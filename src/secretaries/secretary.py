@@ -161,9 +161,9 @@ def run(text = [],
     insert_splits = partial(insert_splits_, 512, tags["split_token"], strict)
     df = df.collect() \
         .with_columns(pl.col(text_column).map_elements(insert_splits, 
-                                                       return_dtype = pl.Utf8).keep_name()) \
-        .with_columns(pl.col(text_column).str.split(tags["split_token"]).keep_name()) \
-        .with_columns(pl.col(text_column).list.lengths().alias('n_splits')) \
+                                                       return_dtype = pl.Utf8).name.keep()) \
+        .with_columns(pl.col(text_column).str.split(tags["split_token"]).name.keep()) \
+        .with_columns(pl.col(text_column).list.len().alias('n_splits')) \
         .lazy()
 
     # Remove brackets with numbers (eg <1>, <<5>>, <<<<<25>>>>>) so that 
@@ -186,7 +186,7 @@ def run(text = [],
                       .alias('names_from_regex')) \
           .with_columns(pl.col('names_from_regex').fill_null([]), \
                         pl.col(text_column) \
-                        .str.replace_all(gatunr, "$1").keep_name(), \
+                        .str.replace_all(gatunr, "$1").name.keep(), \
                         pl.col(text_column) \
                         .str.extract_all(r'\b[a-öA-Ö]+\b') \
                         .fill_null(null_list).alias('tokens'))
@@ -208,7 +208,7 @@ def run(text = [],
                         .unique(subset = ['token']) \
                         .with_columns(pl.col('token') \
                                         .str.extract_all(r"[a-öA-Ö]+") \
-                                        .list.lengths().alias('antal_ord'))
+                                        .list.len().alias('antal_ord'))
 
     # mask recent and coming years, so as to not remove them along with other numbers
     # years = set(map(lambda x: str(x), range(1950, datetime.now().year + 30)))
@@ -309,7 +309,7 @@ def run(text = [],
 
 
     df = df.with_columns(pl.col(text_column) \
-                        .str.strip() \
+                        .str.strip_chars() \
                         .str.replace_all(r"\s+", " ") \
                         .str.replace_all(html_tecken, "") \
                         .str.replace_all(url, " [url] ") \
@@ -382,7 +382,7 @@ def run(text = [],
                              # Placeholder may be broken up if text has been split
 
     # Remove null value placeholders in text column.
-    df = df.with_columns(pl.col(text_column).str.replace(rf'^{re.escape(null_token)}$', '').keep_name()) \
+    df = df.with_columns(pl.col(text_column).str.replace(rf'^{re.escape(null_token)}$', '').name.keep()) \
 
     print_status("saving", '')
 
@@ -412,14 +412,14 @@ def run(text = [],
     # Names from regex
     df_regex = df.lazy() \
                  .filter(pl.col('names_from_regex').is_not_null()) \
-                 .filter(pl.col('names_from_regex').list.lengths() > 0) \
+                 .filter(pl.col('names_from_regex').list.len() > 0) \
                  .collect()
     if df_regex.shape[0] > 0:
         df_regex = df_regex \
                   .explode('names_from_regex') \
                   .select(pl.col('names_from_regex') \
                           .str.extract(mvh, group_index = 3) \
-                          .keep_name()) \
+                          .name.keep()) \
                   .group_by('names_from_regex') \
                   .count().rename({'names_from_regex': 'token'}) \
                   .sort('count', descending = True)
@@ -432,7 +432,7 @@ def run(text = [],
         # Names from corpus
         df_corpus = df.lazy() \
                       .filter(pl.col('names_from_corpus').is_not_null()) \
-                      .filter(pl.col('names_from_corpus').list.lengths() > 0) \
+                      .filter(pl.col('names_from_corpus').list.len() > 0) \
                       .collect()
         if df_corpus.shape[0] > 0:
             df_corpus = df_corpus \
@@ -449,7 +449,7 @@ def run(text = [],
     # Named entities
     if ner:
         df_ner = df.lazy() \
-                   .filter(pl.col('entities').list.lengths() > 0) \
+                   .filter(pl.col('entities').list.len() > 0) \
                    .filter(pl.col('entities').is_not_null()) \
                    .select(pl.col('entities')).explode('entities') \
                    .unnest('entities') \
@@ -481,11 +481,12 @@ def run(text = [],
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         maskings = df_maskings.select(pl.col('masks')).explode('masks') \
-                  .filter(pl.col('masks') != null_list) \
+                  .filter(pl.col('masks') != null_token) \
                   .group_by('masks') \
                   .count().rename({'masks': 'token'}) \
                   .sort('count', descending = True)
     maskings.write_csv(output_folder + '/' + tags[lang]['masked'] + '.csv')
+                  # .filter(pl.col('masks') != null_list) \
 
     border()
     if ner:
